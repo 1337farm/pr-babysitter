@@ -1,0 +1,7 @@
+# .babysitrc values for this repo (KEY=VALUE, sourced by babysit-pr.sh).
+# CLI flags (--artifact=… etc.) override these.
+APK_ARTIFACT=""
+MAIN_WORKFLOW=""
+RELEASE_TAG=""
+APK_GLOB="*.apk"
+LOG_GLOB="*.log"
