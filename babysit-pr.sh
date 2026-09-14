@@ -19,7 +19,9 @@
 # With --apk, after the merge the script keeps going: it waits for main's
 # pipeline run for the merge commit (push event or automerge dispatch),
 # waits for it to complete, then downloads the built APK artifact (falling
-# back to the release tag) into out-dir (default ./apk-out).
+# back to the release tag) into out-dir (default ./apk-out) and MOVES the
+# phone-facing APK(s) into the device Downloads folder (~/storage/downloads
+# when writable, so "Move" — no second copy eating disk on a 66MB file).
 #
 # With --pr-apk, no merge is needed: downloads the artifact from the PR's
 # own apk run immediately (fastest iteration feedback).
@@ -122,6 +124,47 @@ wait_for_run() {
     return 3
 }
 
+# Move phone-facing APK(s) into device Downloads (Termux-visible path).
+# Returns 0 with the final path(s) listed. "Move" — no second copy eating
+# disk on a 60MB+ file. Skips with a loud note when Downloads is missing
+# (plain Linux CI hosts) or unwritable.
+move_to_downloads() {
+    local dir="" downloads=""
+    if [ -n "${1:-}" ]; then dir="$1"; else dir="./apk-out"; fi
+    if [ -n "${DOWNLOADS_DIR:-}" ]; then
+        downloads="$DOWNLOADS_DIR"
+    elif [ -n "${HOME:-}" ] && [ -d "$HOME/storage/downloads" ]; then
+        downloads="$HOME/storage/downloads"
+    fi
+    if [ -z "$downloads" ]; then
+        echo "babysit: no device Downloads folder — left APKs in $dir."
+        return 0
+    fi
+    if [ ! -d "$downloads" ] || [ ! -w "$downloads" ]; then
+        echo "babysit: Downloads '$downloads' missing/unwritable — left APKs in $dir." >&2
+        return 0
+    fi
+    need_cfg APK_GLOB "--apk-glob"
+    local listed
+    # shellcheck disable=SC2086
+    listed="$(ls -t $dir/$APK_GLOB 2>/dev/null || true)"
+    if [ -z "$listed" ]; then
+        echo "babysit: nothing matching $APK_GLOB in $dir to move."
+        return 0
+    fi
+    echo "$listed" | while IFS= read -r f; do
+        [ -n "$f" ] || continue
+        if mv -f "$dir/$f" "$downloads/$f" 2>/dev/null; then
+            echo "babysit: moved $f -> $downloads/"
+        else
+            echo "babysit: WARNING: could not move $f to $downloads/" >&2
+        fi
+    done
+    echo "babysit: Downloads holds:"
+    ls -lh "$downloads" | tail -5
+    return 0
+}
+
 # Remove stale siblings in a download dir. APKs live loose, so scan the dir;
 # keep only the newest APK_GLOB match and the newest 2 LOG_GLOB matches.
 # Removal failures are reported loudly (never silently swallowed) but do not
@@ -185,6 +228,7 @@ fetch_merge_apk() {
         if [ "$PRUNE_AFTER_FETCH" = "1" ]; then
             prune_downloads "$APK_DIR"
         fi
+        move_to_downloads "$APK_DIR"
         return 0
     fi
     need_cfg RELEASE_TAG "--release"
@@ -197,6 +241,7 @@ fetch_merge_apk() {
     if [ "$PRUNE_AFTER_FETCH" = "1" ]; then
         prune_downloads "$APK_DIR"
     fi
+    move_to_downloads "$APK_DIR"
     return 0
 }
 
@@ -213,6 +258,7 @@ fetch_pr_apk() {
         if [ "$PRUNE_AFTER_FETCH" = "1" ]; then
             prune_downloads "$PR_APK_DIR"
         fi
+        move_to_downloads "$PR_APK_DIR"
         return 0
     fi
     echo "babysit: APK download failed for run $run_id." >&2
@@ -261,6 +307,7 @@ fetch_latest_apk() {
     echo "babysit: latest APK downloaded to $LATEST_DIR:"
     ls -lh "$LATEST_DIR"
     prune_downloads "$LATEST_DIR"
+    move_to_downloads "$LATEST_DIR"
 }
 
 if [ "$PRUNE_ONLY" = "0" ]; then

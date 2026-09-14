@@ -39,6 +39,10 @@ babysit-pr.sh <PR> [interval_sec=60] [max_polls=60] [--apk[=dir]] [--latest-apk[
 - `--apk`: after merge, wait for main's run on the merge commit, download.
 - `--latest-apk`: after merge, wait for main, download the release APK.
 - `--prune=dir`: keep newest APK + newest 2 logs, delete the rest.
+- Any fetch that lands APKs also MOVES the phone-facing APK(s) into the
+  device Downloads folder (`~/storage/downloads` when it exists — "move",
+  so a 60MB+ APK is never duplicated on disk). Override with
+  `DOWNLOADS_DIR=/custom/path`.
 
 ## Exit codes
 
