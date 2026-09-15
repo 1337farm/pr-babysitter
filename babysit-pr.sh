@@ -147,25 +147,31 @@ move_to_downloads() {
         return 0
     fi
     need_cfg APK_GLOB "--apk-glob"
-    local listed
+    local listed src f err
     # shellcheck disable=SC2086
     listed="$(ls -t $dir/$APK_GLOB 2>/dev/null || true)"
     if [ -z "$listed" ]; then
         echo "babysit: nothing matching $APK_GLOB in $dir to move."
         return 0
     fi
-    echo "$listed" | while IFS= read -r f; do
-        [ -n "$f" ] || continue
-        if mv -f "$dir/$f" "$downloads/$f" 2>/dev/null; then
+    # NOTE: ls prints the full $dir-prefixed path, so each item below is
+    # already a source path — never re-prefix it with $dir (that double-dir
+    # bug silently broke every move).
+    echo "$listed" | while IFS= read -r src; do
+        [ -n "$src" ] || continue
+        f="${src##*/}"
+        err="$(mv -f "$src" "$downloads/$f" 2>&1)" && {
             echo "babysit: moved $f -> $downloads/"
-        elif cp -f "$dir/$f" "$downloads/$f" 2>/dev/null; then
+            continue
+        }
+        if cp -f "$src" "$downloads/$f" 2>/dev/null; then
             # Cross-device rename (e.g. Termux storage symlink resolved to a
             # different mount by the kernel) — copy then unlink the source so
             # a 60MB+ APK is never held twice unless the move truly fails.
-            rm -f "$dir/$f" 2>/dev/null || true
+            rm -f "$src" 2>/dev/null || true
             echo "babysit: moved(copy+unlink) $f -> $downloads/"
         else
-            echo "babysit: WARNING: could not move $f to $downloads/" >&2
+            echo "babysit: WARNING: could not move $src to $downloads/ (${err:-unknown error})" >&2
         fi
     done
     prune_downloads "$downloads"
