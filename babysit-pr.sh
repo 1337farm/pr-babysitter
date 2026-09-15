@@ -156,6 +156,12 @@ move_to_downloads() {
         [ -n "$f" ] || continue
         if mv -f "$dir/$f" "$downloads/$f" 2>/dev/null; then
             echo "babysit: moved $f -> $downloads/"
+        elif cp -f "$dir/$f" "$downloads/$f" 2>/dev/null; then
+            # Cross-device rename (e.g. Termux storage symlink resolved to a
+            # different mount by the kernel) — copy then unlink the source so
+            # a 60MB+ APK is never held twice unless the move truly fails.
+            rm -f "$dir/$f" 2>/dev/null || true
+            echo "babysit: moved(copy+unlink) $f -> $downloads/"
         else
             echo "babysit: WARNING: could not move $f to $downloads/" >&2
         fi
