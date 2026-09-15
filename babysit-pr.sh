@@ -125,6 +125,8 @@ wait_for_run() {
 }
 
 # Move phone-facing APK(s) into device Downloads (Termux-visible path).
+# Zero-old policy: after the move, Downloads is pruned to the newest
+# APK_GLOB match (+ 2 logs) so no stale bundles linger next to the fresh one.
 # Returns 0 with the final path(s) listed. "Move" — no second copy eating
 # disk on a 60MB+ file. Skips with a loud note when Downloads is missing
 # (plain Linux CI hosts) or unwritable.
@@ -166,6 +168,7 @@ move_to_downloads() {
             echo "babysit: WARNING: could not move $f to $downloads/" >&2
         fi
     done
+    prune_downloads "$downloads"
     echo "babysit: Downloads holds:"
     ls -lh "$downloads" | tail -5
     return 0
