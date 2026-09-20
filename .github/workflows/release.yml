@@ -1,0 +1,59 @@
+name: Release tags
+
+permissions:
+  contents: write
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  release-tags:
+    name: shellcheck + immutable sha tag + move v1
+    # Moving v1 is only safe from main HEAD: a manual dispatch from any
+    # other ref must not repoint the moving major tag.
+    if: github.ref == 'refs/heads/main'
+    concurrency:
+      group: release-tags
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: shellcheck babysit-pr.sh
+        shell: bash
+        run: |
+          if ! command -v shellcheck >/dev/null 2>&1; then
+            sudo apt-get update -qq >/dev/null && sudo apt-get install -y -qq shellcheck >/dev/null
+          fi
+          shellcheck -S warning babysit-pr.sh
+
+      - name: create immutable sha tag and move v1 to main HEAD
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          SHORT="$(git rev-parse --short=10 HEAD)"
+          TAG="sha-${SHORT}"
+          CURRENT="$(git rev-parse HEAD)"
+          if git rev-parse "${TAG}" >/dev/null 2>&1; then
+            EXISTING="$(git rev-parse "${TAG}")"
+            if [ "${EXISTING}" != "${CURRENT}" ]; then
+              echo "ERROR: immutable tag ${TAG} already exists at ${EXISTING}, refusing to move"
+              exit 1
+            fi
+            echo "${TAG} already points at HEAD, skipping creation"
+          else
+            git tag "${TAG}"
+            git push origin "${TAG}"
+            echo "created immutable tag ${TAG} at ${CURRENT}"
+          fi
+          git tag -f v1
+          git push -f origin v1
+          echo "moved v1 to ${CURRENT}"
