@@ -66,6 +66,7 @@ WANT_LATEST=0
 LATEST_DIR="./apk-out"
 WANT_PRUNE=0
 PRUNE_DIR=""
+WANT_PRUNE_DOWNLOADS=0
 PRUNE_AFTER_FETCH=1
 for arg in "$@"; do
     case "$arg" in
@@ -76,6 +77,7 @@ for arg in "$@"; do
         --latest-apk) WANT_LATEST=1 ;;
         --latest-apk=*) WANT_LATEST=1; LATEST_DIR="${arg#--latest-apk=}" ;;
         --prune=*) WANT_PRUNE=1; PRUNE_DIR="${arg#--prune=}" ;;
+        --prune-downloads) WANT_PRUNE_DOWNLOADS=1 ;;
         --no-prune) PRUNE_AFTER_FETCH=0 ;;
         --artifact=*) APK_ARTIFACT="${arg#--artifact=}" ;;
         --workflow=*) MAIN_WORKFLOW="${arg#--workflow=}" ;;
@@ -88,9 +90,11 @@ for arg in "$@"; do
            else echo "usage: $0 <PR> [interval_sec] [max_polls] [options]" >&2; exit 3; fi ;;
     esac
 done
-if [ "$WANT_PRUNE" = "1" ]; then
-    [ -n "$PRUNE_DIR" ] || { echo "usage: $0 --prune=dir" >&2; exit 3; }
-    [ -d "$PRUNE_DIR" ] || { echo "babysit: not a directory: $PRUNE_DIR" >&2; exit 3; }
+if [ "$WANT_PRUNE" = "1" ] || [ "$WANT_PRUNE_DOWNLOADS" = "1" ]; then
+    if [ "$WANT_PRUNE" = "1" ]; then
+        [ -n "$PRUNE_DIR" ] || { echo "usage: $0 --prune=dir" >&2; exit 3; }
+        [ -d "$PRUNE_DIR" ] || { echo "babysit: not a directory: $PRUNE_DIR" >&2; exit 3; }
+    fi
     PRUNE_ONLY=1
 else
     PRUNE_ONLY=0
@@ -395,6 +399,21 @@ fi
 
 if [ "$WANT_PRUNE" = "1" ]; then
     prune_downloads "$PRUNE_DIR"
+fi
+
+if [ "$WANT_PRUNE_DOWNLOADS" = "1" ]; then
+    downloads=""
+    if [ -n "${DOWNLOADS_DIR:-}" ]; then
+        downloads="$DOWNLOADS_DIR"
+    elif [ -n "${HOME:-}" ] && [ -d "$HOME/storage/downloads" ]; then
+        downloads="$HOME/storage/downloads"
+    fi
+    if [ -n "$downloads" ] && [ -d "$downloads" ] && [ -w "$downloads" ]; then
+        echo "babysit: pruning Downloads folder: $downloads"
+        prune_downloads "$downloads"
+    else
+        echo "babysit: Downloads folder not found/writable; skipping prune" >&2
+    fi
 fi
 
 echo "babysit: Done."
