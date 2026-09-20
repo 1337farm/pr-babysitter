@@ -11,6 +11,12 @@ on:
 jobs:
   release-tags:
     name: shellcheck + immutable sha tag + move v1
+    # Moving v1 is only safe from main HEAD: a manual dispatch from any
+    # other ref must not repoint the moving major tag.
+    if: github.ref == 'refs/heads/main'
+    concurrency:
+      group: release-tags
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
